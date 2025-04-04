@@ -62,5 +62,4 @@ Burp API Extractor offers **enhanced filtering and format export options** for *
 ## ⚠️ Known Issues
 - **Repeater does not count old requests**: It only tracks requests **after the extension is loaded**.  
   **Workaround**: Create a **tab group** and rerun all API requests **after loading the extension**.
-- **Postman collection export does not append `http` or `https`** to requests.  
 - **Swagger/OpenAPI export is a work in progress**.
