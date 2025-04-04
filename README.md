@@ -2,6 +2,18 @@
 
 Burp API Extractor is a Burp Suite extension designed to **extract and export unique API endpoints** from **Proxy History** or **Repeater**. It offers **domain filtering**, **HTTP method inclusion**, **path normalization**, and now supports **Postman collection format (v2.1)** and **JSON export**. Results can be saved in **CSV**, **Postman**, or **JSON** formats.
 
+## 🔹 Why Use Burp API Extractor?
+- **Simplifies API discovery** by extracting endpoints without unnecessary parameters.
+- **Automates filtering** based on domain, HTTP method, and dynamic path normalization.
+- **Prepares API exports** in multiple formats, including **CSV, Postman (v2.1), and JSON**.
+- **Enhances testing workflows** with structured data output for further analysis.
+
+## ⚠️ Who Is It For?
+Burp API Extractor is perfect for:
+- **Penetration testers**: Quickly extract APIs for security testing.
+- **Developers & QA teams**: Streamline API documentation and validation.
+- **Bug hunters**: Identify exposed endpoints for vulnerability assessments.
+
 ## 🔹 New in Release v1.2
 - ✅ General **usability polish** and **minor UI enhancements**  
 - ✅ Added **export to Postman (v2.1 collection format)** and **JSON**  
