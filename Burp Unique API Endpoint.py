@@ -7,6 +7,7 @@ import csv
 import json
 import re
 import os
+import time
 from javax.swing import GroupLayout
 from java.util import LinkedHashMap
 from java.net import URL
@@ -17,7 +18,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         self.helpers = callbacks.getHelpers()
         self.stdout = PrintWriter(callbacks.getStdout(), True)
         self.stderr = PrintWriter(callbacks.getStderr(), True)
-
         self.repeater_requests = []
 
         callbacks.setExtensionName("Export Unique API Endpoints")
@@ -26,7 +26,8 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if toolFlag == self.callbacks.TOOL_REPEATER and messageIsRequest:
-            self.repeater_requests.append(messageInfo)
+            if messageInfo not in self.repeater_requests:
+                self.repeater_requests.append(messageInfo)
 
     def createMenuItems(self, invocation):
         menu = JMenuItem("Export Unique API Endpoints", actionPerformed=self.export_unique_api_endpoints)
@@ -111,7 +112,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         export_options.setFont(font)
 
         love_art = JTextArea()
-        love_art.setText(" /\_/\   \n( o.o )  \n > ^ <   ")
+        love_art.setText(" /\\_/\\   \n( o.o )  \n > ^ <   ")
         love_art.setFont(java.awt.Font("Monospaced", java.awt.Font.PLAIN, 20))
         love_art.setEditable(False)
         love_art.setBackground(java.awt.Color(255, 255, 255))
@@ -164,12 +165,10 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         unique_set = {}
         postman_items = []
         method_map = {}
-        filename = "burp_export." + export_format.lower()
 
-        if selected_option == "Proxy History":
-            messages = self.callbacks.getProxyHistory()
-        else:
-            messages = self.repeater_requests
+        filename = "burp_export_{}.{}".format(int(time.time()), export_format.lower())
+
+        messages = self.callbacks.getProxyHistory() if selected_option == "Proxy History" else self.repeater_requests
 
         for item in messages:
             http_service = item.getHttpService()
@@ -190,13 +189,12 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
             raw_path = path
             if query:
                 raw_path += "?" + query
-            raw_path = self.normalize_path(raw_path, normalize)
-            raw_path = self.normalize_tokens(raw_path)
 
-            if full_url:
-                full_url_val = protocol + "://" + host + raw_path
-            else:
-                full_url_val = raw_path.lstrip("/")
+            if normalize:
+                raw_path = self.normalize_path(raw_path, normalize)
+                raw_path = self.normalize_tokens(raw_path)
+
+            full_url_val = protocol + "://" + host + raw_path
 
             if domain_filter and domain_filter not in host:
                 continue
@@ -215,26 +213,27 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
             body = ""
             if method.upper() in ["POST", "PUT"]:
                 raw_body = self.helpers.bytesToString(item.getRequest()[request_info.getBodyOffset():])
-                body = self.normalize_data_tokens(raw_body)
+                body = self.normalize_data_tokens(raw_body) if normalize else raw_body
 
             headers = request_info.getHeaders()
             header_dict = {
-                h.split(":", 1)[0]: self.normalize_data_tokens(h.split(":", 1)[1])
+                h.split(":", 1)[0]: h.split(":", 1)[1].strip()
                 for h in headers[1:] if ":" in h
             }
 
             postman_items.append({
                 "method": method.upper(),
                 "url": full_url_val,
-                "host": "{}://{}".format(protocol, host),
+                "host": host,
+                "protocol": protocol,
                 "path": raw_path,
                 "headers": header_dict,
                 "body": body
             })
 
         try:
-            if export_format == "CSV":
-                with open(filename, "w") as f:
+            with open(filename, "w") as f:
+                if export_format == "CSV":
                     writer = csv.writer(f)
                     if include_method:
                         writer.writerow(["Method", "Endpoint"])
@@ -253,52 +252,81 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                                 writer.writerow([ep])
                                 seen.add(ep)
 
-            elif export_format == "JSON":
-                json.dump(list(unique_set.keys()), open(filename, "w"), indent=2)
+                elif export_format == "JSON":
+                    json.dump(list(unique_set.keys()), f, indent=2)
 
-            elif export_format == "Postman":
-                postman_export = {
-                    "info": {
-                        "name": "Burp Export",
-                        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-                    },
-                    "item": []
-                }
-                for item in postman_items:
-                    postman_export["item"].append({
-                        "name": item["path"],
-                        "request": {
-                            "method": item["method"],
-                            "header": [{"key": k, "value": v} for k, v in item["headers"].items()],
-                            "url": {
+                elif export_format == "Postman":
+                    postman_export = {
+                        "info": {
+                            "name": "Burp Export",
+                            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+                        },
+                        "item": []
+                    }
+                    for item in postman_items:
+                        try:
+                            url_obj = URL(item["url"])
+                            host_parts = [url_obj.getHost()]
+                            path_parts = [p for p in url_obj.getPath().strip("/").split("/") if p]
+                            query_parts = []
+                            if url_obj.getQuery():
+                                for pair in url_obj.getQuery().split("&"):
+                                    if "=" in pair:
+                                        k, v = pair.split("=", 1)
+                                        query_parts.append({"key": k, "value": v})
+                                    else:
+                                        query_parts.append({"key": pair, "value": ""})
+
+                            postman_url = {
                                 "raw": item["url"],
-                                "host": [item["host"].split("://")[1]],
-                                "path": item["path"].strip("/").split("/")
-                            },
-                            "body": {
-                                "mode": "raw",
-                                "raw": item["body"]
+                                "protocol": item["protocol"],
+                                "host": host_parts,
+                                "path": path_parts
+                            }
+                            if query_parts:
+                                postman_url["query"] = query_parts
+
+                            postman_export["item"].append({
+                                "name": item["path"],
+                                "request": {
+                                    "method": item["method"],
+                                    "header": [{"key": k, "value": v} for k, v in item["headers"].items()],
+                                    "url": postman_url,
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": item["body"]
+                                    }
+                                }
+                            })
+                        except Exception as e:
+                            self.stderr.println("⚠ Error creating Postman item: " + str(e))
+                    json.dump(postman_export, f, indent=2)
+
+                elif export_format == "Swagger/OpenAPI":
+                    paths = {}
+                    for item in postman_items:
+                        clean_path = "/" + re.sub(r"https?://[^/]+", "", item["url"]).split("?")[0].lstrip("/")
+                        if clean_path not in paths:
+                            paths[clean_path] = {}
+                        paths[clean_path][item["method"].lower()] = {
+                            "responses": {
+                                "200": {
+                                    "description": "Successful response"
+                                }
                             }
                         }
-                    })
-                json.dump(postman_export, open(filename, "w"), indent=2)
-
-            elif export_format == "Swagger/OpenAPI":
-                paths = {}
-                for item in postman_items:
-                    clean_path = "/" + re.sub(r"https?://[^/]+", "", item["url"]).split("?")[0].lstrip("/")
-                    if clean_path not in paths:
-                        paths[clean_path] = {}
-                    paths[clean_path][item["method"].lower()] = {
-                        "responses": {"200": {"description": "Success"}}
+                    openapi = {
+                        "$schema": "https://spec.openapis.org/oas/3.1/schema/2022-10-07",
+                        "openapi": "3.1.0",
+                        "info": {
+                            "title": "Burp Export",
+                            "version": "1.0.0"
+                        },
+                        "paths": paths
                     }
-                swagger = {
-                    "openapi": "3.0.0",
-                    "info": {"title": "Burp Export", "version": "1.0.0"},
-                    "paths": paths
-                }
-                json.dump(swagger, open(filename, "w"), indent=2)
+                    json.dump(openapi, f, indent=2)
 
+            os.chmod(filename, 0o644)
             self.stdout.println("\u2714 Exported to: {}".format(filename))
 
         except Exception as e:
