@@ -25,9 +25,9 @@ Burp API Extractor is a Burp Suite extension that helps export unique API endpoi
 ## 📌 How to Use
 1️⃣ Install via **Burp** → **Extender** → **Extensions**  
 2️⃣ Right-click any request in Burp  
-3️⃣ Click **"Export Unique API Endpoints"**  
+3️⃣ Click Extension > **"Export Unique API Endpoints"**  
 4️⃣ Choose **export options** via prompts  
-5️⃣ Check generated **CSV** for results  
+5️⃣ Check generated **CSV** for results  (The generated CSV will be in the same folder as the extension)
 
 Burp API Extractor is a Burp Suite extension to extract and export **unique, clean API endpoints** from **Proxy or Repeater**. Supports method inclusion, path normalization, domain filtering, and CSV export.
 
