@@ -1,67 +1,47 @@
-# Burp-API-Extractor-Unique-Endpoint-Exporter
-Burp API Extractor is a Burp Suite extension that helps export unique API endpoints from either Proxy History or Repeater requests. It allows filtering by domain and saves the extracted endpoints to a CSV file.
-📝 Extension Description
-Burp API Extractor is a Burp Suite extension that helps export unique API endpoints from either Proxy History or Repeater requests. It allows filtering by domain and saves the extracted endpoints to a CSV file.
+📦 Burp API Extractor – Unique Endpoint Exporter
+Burp API Extractor is a Burp Suite extension that helps export unique API endpoints from either Proxy History or Repeater. It supports domain filtering, HTTP method inclusion, path normalization, and the choice between full URLs or just endpoint paths. Results are exported to a CSV file.
 
-🔹 Features:
-✅ Extracts API endpoints from Proxy History and Repeater requests
-✅ Filters requests by domain (optional)
+🔹 Features
+✅ Extracts endpoints from Proxy History or Repeater
+✅ Filters by domain (optional)
+✅ Option to include HTTP methods
+✅ Option to export full URL or trimmed endpoint path
+✅ Supports dynamic path normalization (e.g. /api/user/123 → /api/user/{num})
 ✅ Removes duplicate endpoints
-✅ Saves clean API paths (excluding query parameters)
-✅ Works with HTTPS & HTTP requests
+✅ Works with both HTTP and HTTPS
 
 🛠️ How It Works
-The extension listens for HTTP requests in Burp Suite’s Proxy History and Repeater tabs.
+Listens to HTTP requests in Proxy and Repeater tabs.
 
-It extracts only the API endpoints (ignoring request methods & parameters).
+Extracts clean API endpoints (removes query parameters).
 
-Users can choose to export from Proxy History or Repeater requests.
+Prompts user to choose:
 
-(Optional) Users can filter by domain to export APIs from a specific host.
+Source (Proxy or Repeater)
 
-The results are saved in a CSV file (burp_unique_api_endpoints.csv).
+Filter domain (optional)
+
+Include method? (GET/POST etc.)
+
+Full URL or trimmed path?
+
+Normalize dynamic paths?
+
+Saves to burp_unique_api_endpoints.csv.
 
 📌 How to Use
-1️⃣ Install the extension in Burp Suite → Extender → Extensions
-2️⃣ Right-click inside Burp (any request in History or Repeater)
+1️⃣ Install via Burp → Extender → Extensions
+2️⃣ Right-click any request in Burp
 3️⃣ Click "Export Unique API Endpoints"
-4️⃣ Select the source (Proxy History or Repeater)
-5️⃣ (Optional) Enter a domain to filter requests
-6️⃣ The CSV file is generated with all unique API endpoints
+4️⃣ Choose export options via prompts
+5️⃣ Check generated CSV for results
 
-📂 GitHub Repository Description
-Burp API Extractor – Unique Endpoint Exporter
-This Burp Suite extension extracts unique API endpoints from either Proxy History or Repeater requests and saves them to a CSV file. It also allows filtering by domain and removes duplicates.
+📂 GitHub Repo Description
+Burp API Extractor is a Burp Suite extension to extract and export unique, clean API endpoints from Proxy or Repeater. Supports method inclusion, path normalization, domain filtering, and CSV export.
 
 🛠 Requirements
 Burp Suite (Community or Pro)
 
-Jython 2.7 (for running Python extensions in Burp)
+Jython 2.7
 
-Java 8 or later (since Burp requires Java)
-
-💾 Installation
-Install Jython in Burp Suite
-
-Go to Burp Suite → Extender → Options
-
-Under Python Environment, select the Jython standalone .jar
-
-Load the Extension
-
-Go to Burp Suite → Extender → Extensions → Add
-
-Select the Python file containing the script
-
-Export APIs
-
-Right-click anywhere in Burp Suite
-
-Select "Export Unique API Endpoints"
-
-Choose Proxy History or Repeater
-
-(Optional) Enter a domain filter
-
-Check burp_unique_api_endpoints.csv for the exported APIs 🎯
-
+Java 8+
