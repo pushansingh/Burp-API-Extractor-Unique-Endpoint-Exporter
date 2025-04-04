@@ -29,99 +29,99 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
 
     def normalize_path(self, path):
         # Replace numbers with {num}
-        path = re.sub(r'/\d+([/?])?', r'/\{num\}\1', path)
+        path = re.sub(r'/\d+(?=/|$)', r'/\{num\}', path)
 
         # Replace UUIDs with {id}
-        uuid_regex = r'/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+        uuid_regex = r'/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=/|$)'
         path = re.sub(uuid_regex, r'/\{id\}', path)
+
+        # Replace emails with {email}
+        email_regex = r'/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?=/|$)'
+        path = re.sub(email_regex, r'/\{email\}', path)
 
         return path
 
     def export_unique_api_endpoints(self, event):
         try:
-            # Source prompt
+            # Choose source
             options = ["Proxy History", "Repeater"]
             selected_option = JOptionPane.showInputDialog(None, "Select source:", "Export API URLs",
                                                           JOptionPane.QUESTION_MESSAGE, None, options, options[0])
             if not selected_option:
-                self.stdout.println("No option selected. Aborting.")
+                self.stdout.println("No source selected. Aborting.")
                 return
 
-            # Domain filter
+            # Filter by domain
             domain_filter = JOptionPane.showInputDialog("Enter domain to filter (leave blank for all):")
-            domain_filter = domain_filter.strip() if domain_filter else ""
 
-            # Include method
-            method_choice = JOptionPane.showConfirmDialog(None, "Do you want to include request method?",
-                                                          "Method Column", JOptionPane.YES_NO_OPTION)
+            # Include HTTP method?
+            method_choice = JOptionPane.showConfirmDialog(None, "Include request method?", "Method Option",
+                                                          JOptionPane.YES_NO_OPTION)
             include_method = (method_choice == JOptionPane.YES_OPTION)
 
-            # Use full URL or just path
-            full_url_choice = JOptionPane.showConfirmDialog(None, "Do you want full URL (with domain)?",
-                                                            "URL Format", JOptionPane.YES_NO_OPTION)
+            # Use full URL or just path?
+            full_url_choice = JOptionPane.showConfirmDialog(None, "Use full URL (with domain)?", "URL Option",
+                                                            JOptionPane.YES_NO_OPTION)
             use_full_url = (full_url_choice == JOptionPane.YES_OPTION)
 
-            # Normalize dynamic values
-            normalize_choice = JOptionPane.showConfirmDialog(None, "Do you want to normalize dynamic segments (IDs, numbers)?",
-                                                             "Normalize Endpoints", JOptionPane.YES_NO_OPTION)
-            normalize_dynamic = (normalize_choice == JOptionPane.YES_OPTION)
+            # Normalize endpoints?
+            normalize_choice = JOptionPane.showConfirmDialog(None, "Normalize common dynamic parts (IDs, UUIDs, emails)?",
+                                                             "Normalization Option", JOptionPane.YES_NO_OPTION)
+            apply_normalization = (normalize_choice == JOptionPane.YES_OPTION)
 
-            # Collect requests
+            # Get source
             if selected_option == "Proxy History":
                 requests = self.callbacks.getProxyHistory()
             else:
                 requests = self.repeater_requests
 
             unique_entries = set()
+            filename = "burp_unique_api_endpoints.csv"
 
             for item in requests:
-                http_service = item.getHttpService()
-                if not http_service:
+                if not item:
                     continue
 
-                host = http_service.getHost()
-                port = http_service.getPort()
-                protocol = "https" if port == 443 else "http"
+                analyzed = self.helpers.analyzeRequest(item)
+                request = item.getRequest()
+                url = analyzed.getUrl()
 
-                request_info = self.helpers.analyzeRequest(item)
-                method = request_info.getMethod()
-                url = request_info.getUrl()
-                path = url.getPath().split("?")[0]  # Remove query params
+                method = analyzed.getMethod()
+                path = url.getPath().split("?")[0]
+
+                # Apply normalization
+                if apply_normalization:
+                    path = self.normalize_path(path)
 
                 # Domain filter
+                host = url.getHost()
                 if domain_filter and domain_filter not in host:
                     continue
 
-                # Normalize if required
-                if normalize_dynamic:
-                    path = self.normalize_path(path)
-
+                # Final URL
                 if use_full_url:
-                    endpoint = "{}://{}{}".format(protocol, host, path)
+                    endpoint = "{}://{}{}".format(url.getProtocol(), host, path)
                 else:
-                    endpoint = path.lstrip("/")
+                    endpoint = path.lstrip("/")  # remove leading slash
 
                 if include_method:
                     unique_entries.add((method, endpoint))
                 else:
                     unique_entries.add(endpoint)
 
-            filename = "burp_unique_api_endpoints.csv"
+            # Export to CSV
+            with open(filename, "wb") as f:
+                writer = csv.writer(f)
+                if include_method:
+                    writer.writerow(["Method", "Endpoint"])
+                    for method, endpoint in sorted(unique_entries):
+                        writer.writerow([method, endpoint.encode("utf-8")])
+                else:
+                    writer.writerow(["Endpoint"])
+                    for endpoint in sorted(unique_entries):
+                        writer.writerow([endpoint.encode("utf-8")])
 
-            # Write CSV (Jython-friendly)
-            f = open(filename, "wb")
-            writer = csv.writer(f)
-            if include_method:
-                writer.writerow(["Method", "Endpoint"])
-                for method, endpoint in sorted(unique_entries):
-                    writer.writerow([method, endpoint.encode("utf-8")])
-            else:
-                writer.writerow(["Endpoint"])
-                for endpoint in sorted(unique_entries):
-                    writer.writerow([endpoint.encode("utf-8")])
-            f.close()
-
-            self.stdout.println("✅ Unique API endpoints exported to '{}'".format(filename))
+            self.stdout.println("✅ Exported {} unique endpoints to {}".format(len(unique_entries), filename))
 
         except Exception as e:
             self.stderr.println("❌ Error: {}".format(str(e)))
