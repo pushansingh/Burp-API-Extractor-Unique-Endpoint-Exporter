@@ -1,15 +1,24 @@
 # Burp API Extractor – Unique Endpoint Exporter
 
-Burp API Extractor is a Burp Suite extension that helps export unique API endpoints from either **Proxy History** or **Repeater**. It supports **domain filtering**, **HTTP method inclusion**, **path normalization**, and the choice between **full URLs** or just **endpoint paths**. Results are exported to a **CSV file**.
+Burp API Extractor is a Burp Suite extension designed to **extract and export unique API endpoints** from **Proxy History** or **Repeater**. It offers **domain filtering**, **HTTP method inclusion**, **path normalization**, and now supports **Postman collection format (v2.1)** and **JSON export**. Results can be saved in **CSV**, **Postman**, or **JSON** formats.
 
-## 🔹 Features
+## 🔹 New in Release v1.2
+- ✅ General **usability polish** and **minor UI enhancements**  
+- ✅ Added **export to Postman (v2.1 collection format)** and **JSON**  
+- ✅ New **checkbox to exclude OPTIONS requests** from export  
+- ✅ New **checkbox to treat different HTTP methods (GET/POST/etc.) as unique endpoints**  
+- 🚀 **Coming soon:** Export to **Swagger/OpenAPI** format  
+
+## 🛠 Features
 - ✅ Extracts endpoints from **Proxy History** or **Repeater**
 - ✅ Filters by **domain** (optional)
-- ✅ Option to include **HTTP methods**
+- ✅ Option to **include HTTP methods** or treat them as **unique endpoints**
 - ✅ Option to export **full URL** or **trimmed endpoint path**
-- ✅ Supports **dynamic path normalization** (e.g. `/api/user/123` → `/api/user/{num}`)
-- ✅ Removes **duplicate endpoints**
+- ✅ Supports **dynamic path normalization** (e.g., `/api/user/123` → `/api/user/{num}`)
+- ✅ **Removes duplicate endpoints**
 - ✅ Works with both **HTTP and HTTPS**
+- ✅ Exports to **CSV, Postman (v2.1), and JSON**  
+- 🚀 **Upcoming:** Swagger/OpenAPI support  
 
 ## 🛠️ How It Works
 1. **Listens** to HTTP requests in **Proxy** and **Repeater** tabs.
@@ -17,10 +26,11 @@ Burp API Extractor is a Burp Suite extension that helps export unique API endpoi
 3. **Prompts user** to choose:
    - **Source** (Proxy or Repeater)
    - **Filter domain** (optional)
-   - **Include method?** (GET/POST, etc.)
+   - **Exclude OPTIONS requests?**
+   - **Treat HTTP methods as unique endpoints?**
+   - **Export format:** CSV, JSON, or Postman (v2.1)
    - **Full URL** or **trimmed path?**
    - **Normalize dynamic paths?**
-4. **Saves results** to `burp_unique_api_endpoints.csv`.
 
 ## 📌 How to Use
 1️⃣ Install via **Burp** → **Extender** → **Extensions**  
