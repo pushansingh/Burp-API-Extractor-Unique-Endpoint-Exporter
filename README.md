@@ -45,3 +45,10 @@ Burp API Extractor is a Burp Suite extension to extract and export **unique, cle
 - **Burp Suite** (Community or Pro)
 - **Jython 2.7**
 - **Java 8+**
+
+
+## ⚠️ Known Issues
+- **Repeater does not count old requests**: It only tracks requests **after the extension is loaded**.  
+  **Workaround**: Create a **tab group** and rerun all API requests **after loading the extension**.
+- **Postman collection export does not append `http` or `https`** to requests.  
+- **Swagger/OpenAPI export is a work in progress**.
