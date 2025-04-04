@@ -86,6 +86,12 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
 
         font = java.awt.Font("Dialog", java.awt.Font.PLAIN, 14)
 
+        # Export format - FIRST
+        export_label = JLabel("Export Format")
+        export_label.setFont(font)
+        export_options = JComboBox(["CSV", "JSON", "Postman", "Swagger/OpenAPI"])
+        export_options.setFont(font)
+
         source_label = JLabel("Source")
         source_label.setFont(font)
         source_options = JComboBox(["Proxy History", "Repeater"])
@@ -97,22 +103,27 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         domain_field.setFont(font)
         domain_field.setPreferredSize(java.awt.Dimension(400, 25))
 
+        # Checkboxes (controlled later by export format)
         include_method_cb = JCheckBox("Include HTTP Method in Export")
         normalize_cb = JCheckBox("Normalize endpoints (path + query params)")
         full_url_cb = JCheckBox("Include full URL (with domain)")
         exclude_options_cb = JCheckBox("Exclude OPTIONS requests")
         treat_method_unique_cb = JCheckBox("Treat GET, POST, etc. as same endpoint")
 
-        for cb in [include_method_cb, normalize_cb, full_url_cb, exclude_options_cb, treat_method_unique_cb]:
+        all_checkboxes = [
+            include_method_cb,
+            normalize_cb,
+            full_url_cb,
+            exclude_options_cb,
+            treat_method_unique_cb
+        ]
+
+        for cb in all_checkboxes:
             cb.setFont(font)
 
-        export_label = JLabel("Export Format")
-        export_label.setFont(font)
-        export_options = JComboBox(["CSV", "JSON", "Postman", "Swagger/OpenAPI"])
-        export_options.setFont(font)
-
+        # Art - Just for fun
         love_art = JTextArea()
-        love_art.setText(" /\\_/\\   \n( o.o )  \n > ^ <   ")
+        love_art.setText(" /\_/\   \n( o.o )  \n > ^ <   ")
         love_art.setFont(java.awt.Font("Monospaced", java.awt.Font.PLAIN, 20))
         love_art.setEditable(False)
         love_art.setBackground(java.awt.Color(255, 255, 255))
@@ -120,8 +131,29 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         scroll_pane = JScrollPane(love_art)
         scroll_pane.setPreferredSize(java.awt.Dimension(480, 150))
 
+        # Logic: show/hide checkboxes based on selected format
+        def toggleCheckboxesForFormat(format_val):
+            show = {
+                "Include HTTP Method in Export": format_val == "CSV",
+                "Normalize endpoints (path + query params)": True,
+                "Include full URL (with domain)": format_val != "Swagger/OpenAPI",
+                "Exclude OPTIONS requests": True,
+                "Treat GET, POST, etc. as same endpoint": True
+            }
+            for cb in all_checkboxes:
+                cb.setVisible(show[cb.getText()])
+
+        toggleCheckboxesForFormat(export_options.getSelectedItem())
+
+        def on_export_option_change(event):
+            toggleCheckboxesForFormat(export_options.getSelectedItem())
+
+        export_options.addItemListener(on_export_option_change)
+
+        # Layout definition
         layout.setHorizontalGroup(
             layout.createParallelGroup()
+                .addGroup(layout.createSequentialGroup().addComponent(export_label).addComponent(export_options))
                 .addGroup(layout.createSequentialGroup().addComponent(source_label).addComponent(source_options))
                 .addGroup(layout.createSequentialGroup().addComponent(domain_label).addComponent(domain_field))
                 .addComponent(include_method_cb)
@@ -129,12 +161,12 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 .addComponent(full_url_cb)
                 .addComponent(exclude_options_cb)
                 .addComponent(treat_method_unique_cb)
-                .addGroup(layout.createSequentialGroup().addComponent(export_label).addComponent(export_options))
                 .addComponent(scroll_pane)
         )
 
         layout.setVerticalGroup(
             layout.createSequentialGroup()
+                .addGroup(layout.createParallelGroup().addComponent(export_label).addComponent(export_options))
                 .addGroup(layout.createParallelGroup().addComponent(source_label).addComponent(source_options))
                 .addGroup(layout.createParallelGroup().addComponent(domain_label).addComponent(domain_field))
                 .addComponent(include_method_cb)
@@ -142,7 +174,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 .addComponent(full_url_cb)
                 .addComponent(exclude_options_cb)
                 .addComponent(treat_method_unique_cb)
-                .addGroup(layout.createParallelGroup().addComponent(export_label).addComponent(export_options))
                 .addComponent(scroll_pane)
         )
 
@@ -152,11 +183,12 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
             self.stdout.println("Export canceled.")
             return
 
+        # Values
         selected_option = source_options.getSelectedItem()
         domain_filter = domain_field.getText()
-        include_method = include_method_cb.isSelected()
+        include_method = include_method_cb.isVisible() and include_method_cb.isSelected()
         normalize = normalize_cb.isSelected()
-        full_url = full_url_cb.isSelected()
+        full_url = full_url_cb.isVisible() and full_url_cb.isSelected()
         exclude_options = exclude_options_cb.isSelected()
         treat_same_endpoint = treat_method_unique_cb.isSelected()
         method_uniqueness = not treat_same_endpoint
@@ -166,7 +198,8 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         postman_items = []
         method_map = {}
 
-        filename = "burp_export_{}.{}".format(int(time.time()), export_format.lower())
+        safe_format = export_format.lower().replace("/", "_").replace("\\", "_").replace(" ", "_")
+        filename = "burp_export_{}.{}".format(int(time.time()), safe_format)
 
         messages = self.callbacks.getProxyHistory() if selected_option == "Proxy History" else self.repeater_requests
 
@@ -191,7 +224,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 raw_path += "?" + query
 
             if normalize:
-                raw_path = self.normalize_path(raw_path, normalize)
+                raw_path = self.normalize_path(raw_path, True)
                 raw_path = self.normalize_tokens(raw_path)
 
             full_url_val = protocol + "://" + host + raw_path
@@ -316,7 +349,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                             }
                         }
                     openapi = {
-                        "$schema": "https://spec.openapis.org/oas/3.1/schema/2022-10-07",
                         "openapi": "3.1.0",
                         "info": {
                             "title": "Burp Export",
