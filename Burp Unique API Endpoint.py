@@ -11,6 +11,7 @@ import time
 from javax.swing import GroupLayout
 from java.util import LinkedHashMap
 from java.net import URL
+from java.lang import Runnable, Thread
 
 class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
     def registerExtenderCallbacks(self, callbacks):
@@ -30,7 +31,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 self.repeater_requests.append(messageInfo)
 
     def createMenuItems(self, invocation):
-        menu = JMenuItem("Export Unique API Endpoints", actionPerformed=self.export_unique_api_endpoints)
+        menu = JMenuItem("Export Unique API Endpoints", actionPerformed=self.show_export_dialog)
         return [menu]
 
     def normalize_path(self, path, normalize_query):
@@ -75,7 +76,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         text = re.sub(r"\b\d+\b", "{id}", text)
         return text
 
-    def export_unique_api_endpoints(self, event):
+    def show_export_dialog(self, event):
         panel = JPanel()
         panel.setLayout(GroupLayout(panel))
         panel.setPreferredSize(java.awt.Dimension(600, 650))
@@ -86,7 +87,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
 
         font = java.awt.Font("Dialog", java.awt.Font.PLAIN, 14)
 
-        # Export format - FIRST
         export_label = JLabel("Export Format")
         export_label.setFont(font)
         export_options = JComboBox(["CSV", "JSON", "Postman", "Swagger/OpenAPI"])
@@ -103,7 +103,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         domain_field.setFont(font)
         domain_field.setPreferredSize(java.awt.Dimension(400, 25))
 
-        # Checkboxes (controlled later by export format)
         include_method_cb = JCheckBox("Include HTTP Method in Export")
         normalize_cb = JCheckBox("Normalize endpoints (path + query params)")
         full_url_cb = JCheckBox("Include full URL (with domain)")
@@ -121,7 +120,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         for cb in all_checkboxes:
             cb.setFont(font)
 
-        # Art - Just for fun
         love_art = JTextArea()
         love_art.setText(" /\_/\   \n( o.o )  \n > ^ <   ")
         love_art.setFont(java.awt.Font("Monospaced", java.awt.Font.PLAIN, 20))
@@ -131,7 +129,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         scroll_pane = JScrollPane(love_art)
         scroll_pane.setPreferredSize(java.awt.Dimension(480, 150))
 
-        # Logic: show/hide checkboxes based on selected format
         def toggleCheckboxesForFormat(format_val):
             show = {
                 "Include HTTP Method in Export": format_val == "CSV",
@@ -144,13 +141,8 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 cb.setVisible(show[cb.getText()])
 
         toggleCheckboxesForFormat(export_options.getSelectedItem())
+        export_options.addItemListener(lambda e: toggleCheckboxesForFormat(export_options.getSelectedItem()))
 
-        def on_export_option_change(event):
-            toggleCheckboxesForFormat(export_options.getSelectedItem())
-
-        export_options.addItemListener(on_export_option_change)
-
-        # Layout definition
         layout.setHorizontalGroup(
             layout.createParallelGroup()
                 .addGroup(layout.createSequentialGroup().addComponent(export_label).addComponent(export_options))
@@ -177,31 +169,65 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 .addComponent(scroll_pane)
         )
 
-        response = JOptionPane.showConfirmDialog(None, panel, "Export Unique API Endpoints", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
+        # Compatibility with Burp Community Edition (no getBurpFrame)
+        try:
+            burp_frame = self.callbacks.getBurpFrame()
+        except AttributeError:
+            burp_frame = None
+
+        response = JOptionPane.showConfirmDialog(burp_frame, panel, "Export Unique API Endpoints", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
 
         if response != JOptionPane.OK_OPTION:
             self.stdout.println("Export canceled.")
             return
 
-        # Values
-        selected_option = source_options.getSelectedItem()
-        domain_filter = domain_field.getText()
-        include_method = include_method_cb.isVisible() and include_method_cb.isSelected()
-        normalize = normalize_cb.isSelected()
-        full_url = full_url_cb.isVisible() and full_url_cb.isSelected()
-        exclude_options = exclude_options_cb.isSelected()
-        treat_same_endpoint = treat_method_unique_cb.isSelected()
-        method_uniqueness = not treat_same_endpoint
-        export_format = export_options.getSelectedItem()
+        config = {
+            "export_format": export_options.getSelectedItem(),
+            "source_option": source_options.getSelectedItem(),
+            "domain_filter": domain_field.getText(),
+            "include_method": include_method_cb.isVisible() and include_method_cb.isSelected(),
+            "normalize": normalize_cb.isSelected(),
+            "full_url": full_url_cb.isVisible() and full_url_cb.isSelected(),
+            "exclude_options": exclude_options_cb.isSelected(),
+            "method_uniqueness": not treat_method_unique_cb.isSelected()
+        }
+
+        class ExportTask(Runnable):
+            def run(self):
+                try:
+                    self.do_export(config)
+                except Exception as e:
+                    self.stderr.println("⚠ Error in export thread: {}".format(str(e)))
+
+            def __init__(self, outer):
+                self.do_export = outer.do_export
+                self.stderr = outer.stderr
+
+        Thread(ExportTask(self)).start()
+
+    def do_export(self, config):
+        export_format = config["export_format"]
+        source_option = config["source_option"]
+        domain_filter = config["domain_filter"]
+        include_method = config["include_method"]
+        normalize = config["normalize"]
+        full_url = config["full_url"]
+        exclude_options = config["exclude_options"]
+        method_uniqueness = config["method_uniqueness"]
+
+        base_filename = "burp_export_{}".format(int(time.time()))
+        if export_format in ["Postman", "JSON"]:
+            filename = base_filename + ".json"
+        elif export_format == "CSV":
+            filename = base_filename + ".csv"
+        else:
+            filename = base_filename + ".txt"
+
+        messages = self.callbacks.getProxyHistory() if source_option == "Proxy History" else self.repeater_requests
 
         unique_set = {}
         postman_items = []
         method_map = {}
-
-        safe_format = export_format.lower().replace("/", "_").replace("\\", "_").replace(" ", "_")
-        filename = "burp_export_{}.{}".format(int(time.time()), safe_format)
-
-        messages = self.callbacks.getProxyHistory() if selected_option == "Proxy History" else self.repeater_requests
 
         for item in messages:
             http_service = item.getHttpService()
@@ -211,26 +237,21 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
             port = http_service.getPort()
             protocol = "https" if port == 443 else "http"
             request_info = self.helpers.analyzeRequest(item)
-
             method = request_info.getMethod()
+
             if exclude_options and method.upper() == "OPTIONS":
                 continue
 
             url = request_info.getUrl()
             path = url.getPath()
             query = url.getQuery()
-            raw_path = path
-            if query:
-                raw_path += "?" + query
+            raw_path = path + ("?" + query if query else "")
 
             if normalize:
                 raw_path = self.normalize_path(raw_path, True)
                 raw_path = self.normalize_tokens(raw_path)
 
-            if full_url:
-    		full_url_val = protocol + "://" + host + raw_path
-	    else:
-   	        full_url_val = raw_path
+            full_url_val = protocol + "://" + host + raw_path if full_url else raw_path
 
             if domain_filter and domain_filter not in host:
                 continue
@@ -302,7 +323,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                     for item in postman_items:
                         try:
                             url_obj = URL(item["url"])
-                            host_parts = [url_obj.getHost()]
+                            host_parts = url_obj.getHost().split(".")
                             path_parts = [p for p in url_obj.getPath().strip("/").split("/") if p]
                             query_parts = []
                             if url_obj.getQuery():
@@ -335,7 +356,9 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                                 }
                             })
                         except Exception as e:
-                            self.stderr.println("⚠ Error creating Postman item: " + str(e))
+                            self.stderr.println("⚠ Error processing Postman item: {}".format(str(e)))
+                            continue
+
                     json.dump(postman_export, f, indent=2)
 
                 elif export_format == "Swagger/OpenAPI":
@@ -362,7 +385,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                     json.dump(openapi, f, indent=2)
 
             os.chmod(filename, 0o644)
-            self.stdout.println("\u2714 Exported to: {}".format(filename))
+            self.stdout.println("✔ Exported {} items to: {}".format(len(postman_items), filename))
 
         except Exception as e:
-            self.stderr.println("\u2716 Error: {}".format(str(e)))
+            self.stderr.println("✖ Error during export: {}".format(str(e)))
