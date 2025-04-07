@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from burp import IBurpExtender, IContextMenuFactory, IHttpListener
+from burp import IBurpExtender, IContextMenuFactory, IHttpListener, ITab
 from java.io import PrintWriter
-from javax.swing import JPanel, JButton, JTextField, JCheckBox, JMenuItem, JComboBox, JOptionPane, JLabel, JTextArea, JScrollPane, BorderFactory
+from javax.swing import JPanel, JButton, JTextField, JCheckBox, JMenuItem, JComboBox, JOptionPane, JLabel, JTextArea, JScrollPane, BorderFactory, JFileChooser
 import java.awt
 import csv
 import json
@@ -11,19 +11,34 @@ import time
 from javax.swing import GroupLayout
 from java.util import LinkedHashMap
 from java.net import URL
+from javax.swing import JTextPane
 from java.lang import Runnable, Thread
+from java.util import UUID
+from javax.swing.text import DefaultHighlighter, StyleConstants
+from javax.swing.text import SimpleAttributeSet, StyleContext
+from java.awt import Color
 
-class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
+class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener, ITab):
     def registerExtenderCallbacks(self, callbacks):
         self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
         self.stdout = PrintWriter(callbacks.getStdout(), True)
         self.stderr = PrintWriter(callbacks.getStderr(), True)
         self.repeater_requests = []
+        self.main_panel = None
 
         callbacks.setExtensionName("Export Unique API Endpoints")
         callbacks.registerContextMenuFactory(self)
         callbacks.registerHttpListener(self)
+
+        self.create_delta_tab()
+        callbacks.addSuiteTab(self)
+
+    def getTabCaption(self):
+        return "API Delta"
+
+    def getUiComponent(self):
+        return self.main_panel
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if toolFlag == self.callbacks.TOOL_REPEATER and messageIsRequest:
@@ -169,7 +184,6 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 .addComponent(scroll_pane)
         )
 
-        # Compatibility with Burp Community Edition (no getBurpFrame)
         try:
             burp_frame = self.callbacks.getBurpFrame()
         except AttributeError:
@@ -216,7 +230,9 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
         method_uniqueness = config["method_uniqueness"]
 
         base_filename = "burp_export_{}".format(int(time.time()))
-        if export_format in ["Postman", "JSON"]:
+        if export_format == "Postman":
+            filename = base_filename + ".postman"
+        elif export_format == "JSON":
             filename = base_filename + ".json"
         elif export_format == "CSV":
             filename = base_filename + ".csv"
@@ -316,6 +332,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                     postman_export = {
                         "info": {
                             "name": "Burp Export",
+                            "_postman_id": str(UUID.randomUUID()),
                             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
                         },
                         "item": []
@@ -353,7 +370,8 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                                         "mode": "raw",
                                         "raw": item["body"]
                                     }
-                                }
+                                },
+                                "response": []
                             })
                         except Exception as e:
                             self.stderr.println("⚠ Error processing Postman item: {}".format(str(e)))
@@ -389,3 +407,325 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
 
         except Exception as e:
             self.stderr.println("✖ Error during export: {}".format(str(e)))
+
+    def create_delta_tab(self):
+        panel = JPanel()
+        panel.setLayout(GroupLayout(panel))
+        layout = panel.getLayout()
+        layout.setAutoCreateGaps(True)
+        layout.setAutoCreateContainerGaps(True)
+	
+	search_label = JLabel("Search:")
+	search_field = JTextField(40)
+	search_button = JButton("Search", actionPerformed=lambda e: perform_search())
+    
+
+        file1_button = JButton("Select File 1")
+        file2_button = JButton("Select File 2")
+        common_button = JButton("Show Common")
+        unique_button = JButton("Show Unique")
+        export_button = JButton("Export Results")
+        fuzzy_match_cb = JCheckBox("Fuzzy Matching (treat path params as same)")
+        
+        result_area = JTextPane()
+        result_area.setEditable(False)
+        scroll = JScrollPane(result_area)
+
+        file1_path = JTextField(40)
+        file2_path = JTextField(40)
+        file1_path.setEditable(False)
+        file2_path.setEditable(False)
+
+        def perform_search():
+    		query = search_field.getText().strip().lower()
+    		if not query:
+        		return
+   		 # Get the current text in the result area
+    		current_text = result_area.getText().lower()
+		highlighter = result_area.getHighlighter()
+		highlighter.removeAllHighlights()
+    		painter = DefaultHighlighter.DefaultHighlightPainter(Color.YELLOW)
+    		
+		start = 0
+    		while True:
+        		start = current_text.find(query, start)
+        		if start == -1:
+            			break
+        		end = start + len(query)
+        		try:
+            			highlighter.addHighlight(start, end, painter)
+        		except Exception as e:
+            	                self.stderr.println("⚠ Error highlighting search results: {}".format(str(e)))
+        		start = end
+
+	# Improved colors for better visibility and accessibility
+        self.color_file1 = Color(255, 150, 150)  
+        self.color_file2 = Color(150, 255, 150)  
+        self.color_common = Color(150, 200, 255) 
+        self.color_summary = Color(0, 0, 0)           
+        # Create color legend panel
+        legend_panel = JPanel()
+        legend_panel.setLayout(java.awt.GridLayout(1, 4))
+        legend_panel.setBorder(BorderFactory.createTitledBorder("Color Guide"))
+        
+        def create_legend_item(color, text):
+            panel = JPanel()
+            panel.setLayout(java.awt.BorderLayout())
+            color_box = JPanel()
+            color_box.setBackground(color)
+            color_box.setPreferredSize(java.awt.Dimension(20, 20))
+            color_box.setBorder(BorderFactory.createLineBorder(Color.BLACK))
+            panel.add(color_box, java.awt.BorderLayout.WEST)
+            label = JLabel(text)
+            label.setFont(java.awt.Font("Dialog", java.awt.Font.PLAIN, 12))
+            panel.add(label, java.awt.BorderLayout.CENTER)
+            return panel
+        
+        legend_panel.add(create_legend_item(self.color_file1, "Unique to File 1"))
+        legend_panel.add(create_legend_item(self.color_file2, "Unique to File 2"))
+        legend_panel.add(create_legend_item(self.color_common, "Common to Both"))
+        legend_panel.add(create_legend_item(Color.WHITE, "Other text"))
+
+        def choose_file(field):
+            chooser = JFileChooser()
+            ret = chooser.showOpenDialog(panel)
+            if ret == JFileChooser.APPROVE_OPTION:
+                field.setText(chooser.getSelectedFile().getAbsolutePath())
+
+        file1_button.addActionListener(lambda e: choose_file(file1_path))
+        file2_button.addActionListener(lambda e: choose_file(file2_path))
+
+        def normalize_endpoint(endpoint, fuzzy):
+            if fuzzy:
+                # Normalize path parameters like {id}, {email}, etc. to {param}
+                endpoint = re.sub(r'\{[^}]+\}', '{param}', endpoint)
+                # Also normalize numbers in paths
+                endpoint = re.sub(r'(?<=/)\d+(?=/|$)', '{id}', endpoint)
+            return endpoint
+
+        def load_csv_endpoints(path, fuzzy):
+            endpoints = set()
+            try:
+                with open(path, "r") as f:
+                    reader = csv.reader(f)
+                    headers = next(reader)
+                    endpoint_col = headers.index("Endpoint") if "Endpoint" in headers else -1
+                    method_col = headers.index("Method") if "Method" in headers else -1
+                    for row in reader:
+                        if endpoint_col != -1 and method_col != -1:
+                            endpoint = row[endpoint_col]
+                            endpoint = normalize_endpoint(endpoint, fuzzy)
+                            endpoints.add(row[method_col] + " " + endpoint)
+                        elif endpoint_col != -1:
+                            endpoint = row[endpoint_col]
+                            endpoint = normalize_endpoint(endpoint, fuzzy)
+                            endpoints.add(endpoint)
+            except Exception as e:
+                self.stderr.println("⚠ Failed to read {}: {}".format(path, e))
+            return endpoints
+
+        def highlight_text(text, color):
+            doc = result_area.getDocument()
+            style = StyleContext.getDefaultStyleContext().addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, color)
+            result_area.setCaretPosition(0)
+            result_area.setCharacterAttributes(style, False)
+            result_area.setText(text)
+
+        def color_highlight_results(results, file1_set, file2_set, fuzzy):
+            # Clear the result area
+            result_area.setText("")
+            
+            # Get the styled document for the result area
+            doc = result_area.getStyledDocument()
+            
+            # Create styles for coloring
+            style_file1 = doc.addStyle("file1", None)
+            StyleConstants.setForeground(style_file1, self.color_file1)
+            StyleConstants.setBold(style_file1, True)
+
+            style_file2 = doc.addStyle("file2", None)
+            StyleConstants.setForeground(style_file2, self.color_file2)
+            StyleConstants.setBold(style_file2, True)
+
+            style_common = doc.addStyle("common", None)
+            StyleConstants.setForeground(style_common, self.color_common)
+            StyleConstants.setBold(style_common, True)
+
+            style_summary = doc.addStyle("summary", None)
+            StyleConstants.setForeground(style_summary, self.color_summary)
+            StyleConstants.setBold(style_summary, True)
+
+            # Count statistics
+            unique_file1 = 0
+            unique_file2 = 0
+            common = 0
+
+            # Add summary at the top
+            summary = "Comparison Results:\n"
+            summary += "Unique to File 1: {}\n".format(len(file1_set - file2_set))
+            summary += "Unique to File 2: {}\n".format(len(file2_set - file1_set))
+            summary += "Common endpoints: {}\n\n".format(len(file1_set & file2_set))
+            
+            try:
+                # Insert the summary with the summary style
+                doc.insertString(doc.getLength(), summary, style_summary)
+            except Exception as e:
+                self.stderr.println("⚠ Error inserting summary: {}".format(str(e)))
+
+            # Process each line of the results
+            for line in results.split("\n"):
+                if not line.strip():
+                    continue  # Skip empty lines
+
+                # Normalize the endpoint for comparison
+                endpoint = line.split(" ", 1)[-1] if " " in line else line
+                endpoint = normalize_endpoint(endpoint, fuzzy)
+
+                # Check if the endpoint belongs to File 1, File 2, or both
+                in_file1 = any(normalize_endpoint(e.split(" ", 1)[-1] if " " in e else e, fuzzy) == endpoint for e in file1_set)
+                in_file2 = any(normalize_endpoint(e.split(" ", 1)[-1] if " " in e else e, fuzzy) == endpoint for e in file2_set)
+
+                # Determine the style based on the endpoint's presence
+                if in_file1 and in_file2:
+                    style = style_common
+                    common += 1
+                elif in_file1:
+                    style = style_file1
+                    unique_file1 += 1
+                elif in_file2:
+                    style = style_file2
+                    unique_file2 += 1
+                else:
+                    style = None  # Default style (no highlight)
+
+                # Insert the line with the appropriate style
+                try:
+                    doc.insertString(doc.getLength(), line + "\n", style)
+                except Exception as e:
+                    self.stderr.println("⚠ Error inserting line: {}".format(str(e)))
+
+            # Add final count
+            final_count = "\n--- End of Results ---\n"
+            try:
+                doc.insertString(doc.getLength(), final_count, style_summary)
+            except Exception as e:
+                self.stderr.println("⚠ Error inserting final count: {}".format(str(e)))
+        def compare(type_):
+            file1 = file1_path.getText().strip()
+            file2 = file2_path.getText().strip()
+            fuzzy = fuzzy_match_cb.isSelected()
+            
+            if not os.path.exists(file1) or not os.path.exists(file2):
+                result_area.setText("❌ One or both files not selected or do not exist.")
+                return
+
+            endpoints1 = load_csv_endpoints(file1, fuzzy)
+            endpoints2 = load_csv_endpoints(file2, fuzzy)
+
+            if type_ == "common":
+                result = sorted(endpoints1 & endpoints2)
+                result_text = "COMMON ENDPOINTS ({} found):\n\n".format(len(result)) + "\n".join(result) if result else "No common endpoints found."
+            else:
+                unique1 = sorted(endpoints1 - endpoints2)
+                unique2 = sorted(endpoints2 - endpoints1)
+                result = unique1 + unique2
+                result_text = "UNIQUE ENDPOINTS ({} in File 1, {} in File 2):\n\n".format(len(unique1), len(unique2))
+                result_text += "=== Unique to File 1 ===\n" + "\n".join(unique1) + "\n\n" if unique1 else ""
+                result_text += "=== Unique to File 2 ===\n" + "\n".join(unique2) if unique2 else ""
+                if not unique1 and not unique2:
+                    result_text += "No unique endpoints found."
+
+            color_highlight_results(result_text, endpoints1, endpoints2, fuzzy)
+
+        def export_results():
+            file1 = file1_path.getText().strip()
+            file2 = file2_path.getText().strip()
+            fuzzy = fuzzy_match_cb.isSelected()
+            
+            if not os.path.exists(file1) or not os.path.exists(file2):
+                result_area.setText("❌ One or both files not selected or do not exist.")
+                return
+
+            endpoints1 = load_csv_endpoints(file1, fuzzy)
+            endpoints2 = load_csv_endpoints(file2, fuzzy)
+
+            common = sorted(endpoints1 & endpoints2)
+            unique1 = sorted(endpoints1 - endpoints2)
+            unique2 = sorted(endpoints2 - endpoints1)
+
+            chooser = JFileChooser()
+            ret = chooser.showSaveDialog(panel)
+            if ret == JFileChooser.APPROVE_OPTION:
+                filename = chooser.getSelectedFile().getAbsolutePath()
+                if not filename.endswith('.csv'):
+                    filename += '.csv'
+                
+                try:
+                    with open(filename, 'w') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(['Type', 'Method', 'Endpoint'])
+                        
+                        # Write unique to file 1
+                        for item in unique1:
+                            if " " in item:
+                                method, endpoint = item.split(" ", 1)
+                                writer.writerow(['Unique to File 1', method, endpoint])
+                            else:
+                                writer.writerow(['Unique to File 1', '', item])
+                        
+                        # Write unique to file 2
+                        for item in unique2:
+                            if " " in item:
+                                method, endpoint = item.split(" ", 1)
+                                writer.writerow(['Unique to File 2', method, endpoint])
+                            else:
+                                writer.writerow(['Unique to File 2', '', item])
+                        
+                        # Write common
+                        for item in common:
+                            if " " in item:
+                                method, endpoint = item.split(" ", 1)
+                                writer.writerow(['Common', method, endpoint])
+                            else:
+                                writer.writerow(['Common', '', item])
+                    
+                    self.stdout.println("✔ Results exported to: {}".format(filename))
+                    result_area.setText(result_area.getText() + "\n\n✔ Results exported to: {}".format(filename))
+                except Exception as e:
+                    self.stderr.println("✖ Error exporting results: {}".format(str(e)))
+                    result_area.setText(result_area.getText() + "\n\n✖ Error exporting results: {}".format(str(e)))
+
+        common_button.addActionListener(lambda e: compare("common"))
+        unique_button.addActionListener(lambda e: compare("unique"))
+        export_button.addActionListener(lambda e: export_results())
+
+        layout.setHorizontalGroup(
+            layout.createParallelGroup()
+                .addGroup(layout.createSequentialGroup().addComponent(file1_button).addComponent(file1_path))
+                .addGroup(layout.createSequentialGroup().addComponent(file2_button).addComponent(file2_path))
+                .addComponent(legend_panel)
+                .addGroup(layout.createSequentialGroup()
+                    .addComponent(common_button)
+                    .addComponent(unique_button)
+                    .addComponent(export_button)
+                    .addComponent(fuzzy_match_cb))
+                    .addGroup(layout.createSequentialGroup().addComponent(search_label).addComponent(search_field).addComponent(search_button))
+        .addComponent(scroll)
+                .addComponent(scroll)
+        )
+
+        layout.setVerticalGroup(
+            layout.createSequentialGroup()
+                .addGroup(layout.createParallelGroup().addComponent(file1_button).addComponent(file1_path))
+                .addGroup(layout.createParallelGroup().addComponent(file2_button).addComponent(file2_path))
+                .addComponent(legend_panel)
+                .addGroup(layout.createParallelGroup()
+                    .addComponent(common_button)
+                    .addComponent(unique_button)
+                    .addComponent(export_button)
+                    .addComponent(fuzzy_match_cb))
+                    .addGroup(layout.createParallelGroup().addComponent(search_label).addComponent(search_field).addComponent(search_button))
+                .addComponent(scroll)
+        )
+
+        self.main_panel = panel
