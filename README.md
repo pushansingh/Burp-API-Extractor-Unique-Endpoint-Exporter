@@ -1,9 +1,9 @@
 # Burp API Extractor – Unique Endpoint Exporter
 
-Burp API Extractor is a Burp Suite extension designed to **extract and export unique API endpoints** from **Proxy History** or **Repeater**. It offers **domain filtering**, **HTTP method inclusion**, **path normalization**, and now supports **Postman collection format (v2.1)** and **JSON export**. Results can be saved in **CSV**, **Postman**, or **JSON** formats.
+Burp API Extractor is a powerful Burp Suite extension designed to extract, analyze, and export unique API endpoints from Proxy History or Repeater . It simplifies API discovery by removing unnecessary parameters, normalizing dynamic paths, and exporting results in multiple formats, including CSV , Postman (v2.1) , JSON , and Swagger/OpenAPI . The tool also introduces the API Delta feature, enabling users to compare two sets of API endpoints and identify unique and common endpoints.
 
 ## 🔹 Why Use Burp API Extractor?
-- **Simplifies API discovery** by extracting endpoints without unnecessary parameters.
+- **Simplifies API discovery** by extracting clean, structured endpoints.
 - **Automates filtering** based on domain, HTTP method, and dynamic path normalization.
 - **Prepares API exports** in multiple formats, including **CSV, Postman (v2.1), and JSON**.
 - **Enhances testing workflows** with structured data output for further analysis.
@@ -13,23 +13,27 @@ Burp API Extractor is perfect for:
 - **Penetration testers**: Quickly extract APIs for security testing.
 - **Developers & QA teams**: Streamline API documentation and validation.
 - **Bug hunters**: Identify exposed endpoints for vulnerability assessments.
+- **API analysts** : Compare and analyze API datasets using the API Delta tool.
 
-## 🔹 New in Release v1.2
-- ✅ General **usability polish** and **minor UI enhancements**  
-- ✅ Added **export to Postman (v2.1 collection format)** and **JSON**  
-- ✅ New **checkbox to exclude OPTIONS requests** from export  
-- ✅ New **checkbox to treat different HTTP methods (GET/POST/etc.) as unique endpoints**  
+## 🔹 New in Release v1.3
+- ✅  Added API Delta Tool : Compare two API endpoint datasets to identify:
+Unique endpoints present in only one file.
+Common endpoints shared between both files.
+Fuzzy matching option to treat dynamic path parameters (e.g., {id}, {uuid}) as identical.
 - 🚀 **Coming soon:** Export to **Swagger/OpenAPI** format  
 
 ## 🛠 Features
-- ✅ Extracts endpoints from **Proxy History** or **Repeater**
-- ✅ Filters by **domain** (optional)
-- ✅ Option to **include HTTP methods** or treat them as **unique endpoints**
-- ✅ Option to export **full URL** or **trimmed endpoint path**
-- ✅ Supports **dynamic path normalization** (e.g., `/api/user/123` → `/api/user/{num}`)
-- ✅ **Removes duplicate endpoints**
-- ✅ Works with both **HTTP and HTTPS**
-- ✅ Exports to **CSV, Postman (v2.1), and JSON**  
+✅ Extracts endpoints from Proxy History or Repeater.
+✅ Filters by domain (optional).
+✅ Option to include HTTP methods or treat them as unique endpoints.
+✅ Export full URL or trimmed endpoint path.
+✅ Supports dynamic path normalization (e.g., /api/user/123 → /api/user/{id}).
+✅ Removes duplicate endpoints.
+✅ Works with both HTTP and HTTPS .
+✅ Exports to CSV , Postman (v2.1) , and JSON .
+✅ API Delta Tool : Compare two API endpoint datasets.
+Identify unique, common, and fuzzy-matched endpoints.
+Visualize results with a color-coded legend.
 - 🚀 **Upcoming:** Swagger/OpenAPI support  
 
 ## 🛠️ How It Works
@@ -51,13 +55,16 @@ Burp API Extractor is perfect for:
 4️⃣ Choose **export options** via prompts  
 5️⃣ Check generated **CSV** for results  (The generated CSV will be in the same folder as the extension)
 
-Burp API Extractor offers **enhanced filtering and format export options** for **clean, structured API endpoint extraction**.
+For API Delta :
+1️⃣ Navigate to the API Delta tab in Burp.
+2️⃣ Select two files containing API endpoints (CSV)
+3️⃣ Enable fuzzy matching if needed.
+4️⃣ View results with a color-coded legend
 
 ## 🛠 Requirements
 - **Burp Suite** (Community or Pro)
 - **Jython 2.7**
 - **Java 8+**
-
 
 ## ⚠️ Known Issues
 - **Repeater does not count old requests**: It only tracks requests **after the extension is loaded**.  
