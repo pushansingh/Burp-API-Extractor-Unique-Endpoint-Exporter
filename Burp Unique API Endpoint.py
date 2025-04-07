@@ -227,7 +227,10 @@ class BurpExtender(IBurpExtender, IContextMenuFactory, IHttpListener):
                 raw_path = self.normalize_path(raw_path, True)
                 raw_path = self.normalize_tokens(raw_path)
 
-            full_url_val = protocol + "://" + host + raw_path
+            if full_url:
+    		full_url_val = protocol + "://" + host + raw_path
+	    else:
+   	        full_url_val = raw_path
 
             if domain_filter and domain_filter not in host:
                 continue
