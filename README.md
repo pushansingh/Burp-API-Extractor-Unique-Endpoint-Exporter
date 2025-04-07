@@ -82,7 +82,7 @@ This extension is perfect for:
 2. Right-click any request in Burp  
 3. Choose **"Export Unique API Endpoints"**  
 4. Pick your export options  
-5. Check the generated **CSV** for results  
+5. Check the generated **file** for results  
 
 ### 🔹 To Use API Delta:
 1. Open the **API Delta** tab  
