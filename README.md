@@ -96,7 +96,6 @@ This extension is perfect for:
 
 - 🧪 **Burp Suite** (Community or Pro)  
 - 🐍 **Jython 2.7**  
-- ☕ **Java 8+**  
 
 ---
 
